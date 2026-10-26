@@ -173,6 +173,7 @@ global CreateBAK        := 1       ; 排版前是否自动生成原始备份
 global OptFixDocNum     := 0       ; 是否自动将发文字号括号规范为六角括号〔〕
 global OptPreventOrphan := 0       ; 是否启用标题防孤行
 global OptAttachmentNewPage := 1   ; 是否让“附件1”标记另起一页（GB/T 9704-2012：附件另面编排）
+global gAttachSectionIndex := 0    ; v6.8.15：附件另起一页时，新建节的节号，用于在 SetPageNumbers 强制页码从 1 开始
 global MaxHeadingLen    := 35      ; 标题最大字符数拦截阈值
 global ContextActive    := 0       ; 用户是否主动添加过右键菜单标记
 
@@ -2843,6 +2844,8 @@ ApplyAttachmentPageBreak(doc, p_mark, mark_idx) {
     }
 
     if (IsObject(sec)) {
+        global gAttachSectionIndex
+        try gAttachSectionIndex := sec.Index
         ps := ""
         try ps := sec.PageSetup
         if (IsObject(ps)) {
@@ -3278,7 +3281,7 @@ WriteFooterPageBlock(footer, paraIndex, formatStr, bmName) {
 }
 
 SetPageNumbers(doc, formatStr := "格式数字 — 1 — 居中", skipSinglePage := 1) {
-    global ActiveStyle
+    global ActiveStyle, gAttachSectionIndex
     warnings := []
     ; v6.8.14：页码字体字号统一取自方案（默认 宋体 四号 不加粗）
     pageFont := ActiveStyle.PageNumFont
@@ -3288,7 +3291,15 @@ SetPageNumbers(doc, formatStr := "格式数字 — 1 — 居中", skipSinglePage
     disable := ((totalPages <= 1 && skipSinglePage) || InStr(formatStr, "无"))
 
     for section in doc.Sections {
+        isAttachSec := (gAttachSectionIndex != 0 && section.Index == gAttachSectionIndex)
         pageSetup := section.PageSetup
+        if (isAttachSec) {
+            try {
+                pn := pageSetup.PageNumbering
+                try pn.RestartNumberingAtSection := -1
+                pn.StartingNumber := 1
+            }
+        }
         footerTypes := [1]
         if (pageSetup.DifferentFirstPageHeaderFooter)
             footerTypes.Push(2)
@@ -3300,6 +3311,9 @@ SetPageNumbers(doc, formatStr := "格式数字 — 1 — 居中", skipSinglePage
             try {
                 footer := section.Footers(footerType)
                 footer.LinkToPrevious := false
+                if (isAttachSec) {
+                    try footer.Range.Text := ""
+                }
 
                 ; 先移除上一次写入的页码块，保留页脚其他内容
                 removed := RemoveFooterPageBlock(footer)
@@ -4125,6 +4139,8 @@ FormatWordDocument(file_path, app, &err_msg := "", &warn_msg := "") {
         pageNumWarn := SetPageNumbers(doc, PageNumFormat, SkipSinglePageNum)
         if (pageNumWarn != "")
             warn_msg := pageNumWarn
+        global gAttachSectionIndex
+        gAttachSectionIndex := 0
 
         try {
             doc.Save()
