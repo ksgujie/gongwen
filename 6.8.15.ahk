@@ -2883,11 +2883,19 @@ ApplyAttachmentPageBreak(doc, p_mark, mark_idx) {
                     try sec.Footers(3).Range.Text := ""
                 }
             }
-            ; 强制设置：本节页码从 1 开始
+            ; 强制设置：本节页码从 1 开始。
+            ; WPS 对 PageSetup.PageNumbering.RestartNumberingAtSection 支持不稳定，
+            ; 这里同时尝试 Footers.PageNumbers 对象（WPS 对后者兼容性更好），
+            ; 两种写法都设一遍，哪个生效都可以。
             try {
                 pn := ps.PageNumbering
                 try pn.RestartNumberingAtSection := true
                 pn.StartingNumber := 1
+            }
+            try {
+                pnums := sec.Footers(1).PageNumbers
+                try pnums.RestartNumberingAtSection := true
+                pnums.StartingNumber := 1
             }
             ; 部分 Word 版本也需要在页眉页脚集合上确保不链接
             try sec.Headers(1).LinkToPrevious := false
@@ -3313,10 +3321,16 @@ SetPageNumbers(doc, formatStr := "格式数字 — 1 — 居中", skipSinglePage
         isAttachSec := (gAttachSectionIndex != 0 && section.Index == gAttachSectionIndex)
         pageSetup := section.PageSetup
         if (isAttachSec) {
+            ; WPS 下 PageSetup.PageNumbering 可能不生效，补充 Footers.PageNumbers 写法
             try {
                 pn := pageSetup.PageNumbering
                 try pn.RestartNumberingAtSection := true
                 pn.StartingNumber := 1
+            }
+            try {
+                pnums := section.Footers(1).PageNumbers
+                try pnums.RestartNumberingAtSection := true
+                pnums.StartingNumber := 1
             }
         }
         footerTypes := [1]
@@ -3331,8 +3345,18 @@ SetPageNumbers(doc, formatStr := "格式数字 — 1 — 居中", skipSinglePage
                 footer := section.Footers(footerType)
                 ; v6.8.15：附件节先清空页脚（避免顺延正文页码），再断开与上一节的链接，
                 ; 避免清空操作把 LinkToPrevious 重置回 true。
+                ; WPS 下 Range.Text := "" 有时清不干净，残留旧 PAGE 域会让页码继续顺延，
+                ; 所以再逐个删除页脚里的所有域，确保后面写入的是全新的页码域。
                 if (isAttachSec) {
                     try footer.Range.Text := ""
+                    try {
+                        fields := footer.Range.Fields
+                        i := fields.Count
+                        while (i >= 1) {
+                            try fields.Item(i).Delete()
+                            i -= 1
+                        }
+                    }
                 }
                 footer.LinkToPrevious := false
 
