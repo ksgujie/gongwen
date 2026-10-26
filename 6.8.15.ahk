@@ -2884,18 +2884,18 @@ ApplyAttachmentPageBreak(doc, p_mark, mark_idx) {
                 }
             }
             ; 强制设置：本节页码从 1 开始。
-            ; WPS 对 PageSetup.PageNumbering.RestartNumberingAtSection 支持不稳定，
-            ; 这里同时尝试 Footers.PageNumbers 对象（WPS 对后者兼容性更好），
-            ; 两种写法都设一遍，哪个生效都可以。
-            try {
-                pn := ps.PageNumbering
-                try pn.RestartNumberingAtSection := true
-                pn.StartingNumber := 1
-            }
+            ; 重要（WPS 兼容）：WPS 的 PageSetup 对象根本没有 PageNumbering 属性，
+            ; 所以必须通过 Footers(x).PageNumbers 设置，WPS 才认。
+            ; Word 两者都支持，这里先写 Footers.PageNumbers，再补 PageSetup 兜底。
             try {
                 pnums := sec.Footers(1).PageNumbers
-                try pnums.RestartNumberingAtSection := true
+                pnums.RestartNumberingAtSection := true
                 pnums.StartingNumber := 1
+            }
+            try {
+                pn := ps.PageNumbering
+                pn.RestartNumberingAtSection := true
+                pn.StartingNumber := 1
             }
             ; 部分 Word 版本也需要在页眉页脚集合上确保不链接
             try sec.Headers(1).LinkToPrevious := false
@@ -3320,19 +3320,7 @@ SetPageNumbers(doc, formatStr := "格式数字 — 1 — 居中", skipSinglePage
     for section in doc.Sections {
         isAttachSec := (gAttachSectionIndex != 0 && section.Index == gAttachSectionIndex)
         pageSetup := section.PageSetup
-        if (isAttachSec) {
-            ; WPS 下 PageSetup.PageNumbering 可能不生效，补充 Footers.PageNumbers 写法
-            try {
-                pn := pageSetup.PageNumbering
-                try pn.RestartNumberingAtSection := true
-                pn.StartingNumber := 1
-            }
-            try {
-                pnums := section.Footers(1).PageNumbers
-                try pnums.RestartNumberingAtSection := true
-                pnums.StartingNumber := 1
-            }
-        }
+
         footerTypes := [1]
         if (pageSetup.DifferentFirstPageHeaderFooter)
             footerTypes.Push(2)
@@ -3359,6 +3347,22 @@ SetPageNumbers(doc, formatStr := "格式数字 — 1 — 居中", skipSinglePage
                     }
                 }
                 footer.LinkToPrevious := false
+
+                ; v6.8.15（WPS 兼容）：断开链接后再设置页码从 1 开始。
+                ; WPS 的 PageSetup 对象没有 PageNumbering 属性，必须用
+                ; Footers(x).PageNumbers；Word 两者都支持，再补一次 PageSetup 兜底。
+                if (isAttachSec) {
+                    try {
+                        pnums := footer.PageNumbers
+                        pnums.RestartNumberingAtSection := true
+                        pnums.StartingNumber := 1
+                    }
+                    try {
+                        pn := pageSetup.PageNumbering
+                        pn.RestartNumberingAtSection := true
+                        pn.StartingNumber := 1
+                    }
+                }
 
                 ; 先移除上一次写入的页码块，保留页脚其他内容
                 removed := RemoveFooterPageBlock(footer)
