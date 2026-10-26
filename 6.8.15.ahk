@@ -173,7 +173,8 @@ global CreateBAK        := 1       ; 排版前是否自动生成原始备份
 global OptFixDocNum     := 0       ; 是否自动将发文字号括号规范为六角括号〔〕
 global OptPreventOrphan := 0       ; 是否启用标题防孤行
 global OptAttachmentNewPage := 1   ; 是否让“附件1”标记另起一页（GB/T 9704-2012：附件另面编排）
-global gAttachSectionIndex := 0    ; v6.8.15：附件另起一页时，新建节的节号，用于在 SetPageNumbers 强制页码从 1 开始
+global gAttachSectionIndex := 0    ; v6.8.15：附件另起一页时，附件所在节的节号，用于在 SetPageNumbers 强制页码从 1 开始
+global wdSectionBreakNextPage := 2 ; Word WdSectionBreak 枚举：wdSectionBreakNextPage = 2（在当前位置下一页开始新节）
 global MaxHeadingLen    := 35      ; 标题最大字符数拦截阈值
 global ContextActive    := 0       ; 用户是否主动添加过右键菜单标记
 
@@ -2802,14 +2803,12 @@ ApplyAttachmentPageBreak(doc, p_mark, mark_idx) {
     if (!IsObject(p_mark) || mark_idx <= 1)
         return
 
-    ; 判断附件是否已经在新页：标记段有段前分页，或标记段/上一段末尾有分页符/分节符
+    ; 判断附件是否已经在新页：只有“段前分页”已设，或“上一段末尾”有分页符/分节符，
+    ; 才说明附件标记段本身已经位于页首。若“附件标记”段自己含 Chr(12)，通常表示
+    ; 页码在附件文字之后才换页，附件标记本身还不在新页，不能据此跳过处理。
     alreadyNewPage := false
     try {
         if (p_mark.Format.PageBreakBefore)
-            alreadyNewPage := true
-    }
-    try {
-        if (!alreadyNewPage && HasPageBreakChar(p_mark.Range.Text))
             alreadyNewPage := true
     }
     try {
@@ -2817,7 +2816,8 @@ ApplyAttachmentPageBreak(doc, p_mark, mark_idx) {
             alreadyNewPage := true
     }
 
-    ; 若附件尚未在新页，在“附件标记”段落最前面插入分节符（下一页），新建一节
+    ; 若附件尚未在新页，在“附件标记”段落最前面插入分节符（下一页），新建一节。
+    ; 插入分节符可让后续页码独立编号；若插入失败，回退到段前分页（只换页，页码仍顺延）。
     if (!alreadyNewPage) {
         try {
             r := p_mark.Range.Duplicate
