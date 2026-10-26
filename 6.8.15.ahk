@@ -2813,31 +2813,33 @@ ApplyAttachmentPageBreak(doc, p_mark, mark_idx) {
             return
     }
 
-    oldCount := 0
-    try oldCount := doc.Sections.Count
-
     try {
+        ; 在“附件标记”段落最前面插入分节符（下一页），新建一节
         r := p_mark.Range.Duplicate
         r.Collapse(1)
-        ; 在“附件标记”段落最前面插入分节符（下一页），新建一节
         r.InsertBreak(wdSectionBreakNextPage)
     } catch {
-        ; 兼容性回退：万一分节符插入失败，仍尝试段前分页
         try p_mark.Format.PageBreakBefore := true
         return
     }
 
-    ; 插入分节符后，新节通常就是最后一节或旧节数+1
+    ; 分节符插入后，重新定位“附件标记”段落。Word 会把分节符插到该段前面，
+    ; 此时附件标记段落很可能已进入新节。优先取“附件标记”段落所属的节来设置页码重置。
+    p_mark2 := ""
+    try p_mark2 := doc.Paragraphs(mark_idx)
+    catch
+        try p_mark2 := p_mark.Range.Paragraphs(1)
+    if (!IsObject(p_mark2))
+        p_mark2 := p_mark
+
     sec := ""
-    try {
-        if (oldCount >= 0 && doc.Sections.Count >= oldCount + 1)
-            sec := doc.Sections(oldCount + 1)
-    }
+    try sec := p_mark2.Range.Sections(1)
     if (!IsObject(sec)) {
-        try sec := p_mark.Range.Sections(1)
-    }
-    if (!IsObject(sec)) {
-        try sec := doc.Sections(doc.Sections.Count)
+        try {
+            cnt := doc.Sections.Count
+            if (cnt >= 1)
+                sec := doc.Sections(cnt)
+        }
     }
 
     if (IsObject(sec)) {
@@ -2846,38 +2848,47 @@ ApplyAttachmentPageBreak(doc, p_mark, mark_idx) {
         if (IsObject(ps)) {
             ; 断开新节页脚与上一节的链接（首页、奇偶页、普通页脚）
             try sec.Footers(1).LinkToPrevious := false
-            try {
-                if (ps.DifferentFirstPageHeaderFooter)
-                    sec.Footers(2).LinkToPrevious := false
-            }
-            try {
-                if (ps.OddAndEvenPagesHeaderFooter)
-                    sec.Footers(3).LinkToPrevious := false
-            }
-            ; 清空新节页脚里可能从上一节复制过来的页码内容，避免顺延显示
             try sec.Footers(1).Range.Text := ""
             try {
+                if (ps.DifferentFirstPageHeaderFooter) {
+                    try sec.Footers(2).LinkToPrevious := false
+                    try sec.Footers(2).Range.Text := ""
+                }
+            }
+            try {
+                if (ps.OddAndEvenPagesHeaderFooter) {
+                    try sec.Footers(3).LinkToPrevious := false
+                    try sec.Footers(3).Range.Text := ""
+                }
+            }
+            ; 强制设置：本节页码从 1 开始
+            try {
+                pn := ps.PageNumbering
+                try pn.RestartNumberingAtSection := -1  ; wdRestartSection
+                Sleep(1)
+                pn.RestartNumberingAtSection := -1
+                pn.StartingNumber := 1
+            }
+            ; 部分 Word 版本也需要在页眉页脚集合上确保不链接
+            try sec.Headers(1).LinkToPrevious := false
+            try {
                 if (ps.DifferentFirstPageHeaderFooter)
-                    sec.Footers(2).Range.Text := ""
+                    sec.Headers(2).LinkToPrevious := false
             }
             try {
                 if (ps.OddAndEvenPagesHeaderFooter)
-                    sec.Footers(3).Range.Text := ""
-            }
-            ; 附件页码从 1 开始（必须作用于新节）
-            try {
-                pn := ps.PageNumbering
-                try pn.RestartNumberingAtSection := false
-                Sleep(1)
-                pn.RestartNumberingAtSection := true
-                pn.StartingNumber := 1
+                    sec.Headers(3).LinkToPrevious := false
             }
         }
     }
 
     try {
-        p_mark2 := p_mark.Range.Paragraphs(1)
-        try p_mark2.Format.PageBreakBefore := false
+        if (IsObject(p_mark2))
+            try p_mark2.Format.PageBreakBefore := false
+    }
+    try {
+        if (IsObject(p_mark))
+            try p_mark.Format.PageBreakBefore := false
     }
 }
 
