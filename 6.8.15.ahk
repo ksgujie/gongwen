@@ -2829,11 +2829,29 @@ ApplyAttachmentPageBreak(doc, p_mark, mark_idx) {
     }
 
     ; 分节符插入后，重新定位“附件标记”段落所在的节，用于页码重置。
-    ; Word 会把分节符插到该段前面，附件标记段落进入新节。
+    ; 注意：不能直接用 p_mark.Range.Paragraphs(1)。InsertBreak 之后 p_mark 的
+    ; 范围可能仍指向分节符之前的旧段落，Sections(1) 就会拿到旧节，
+    ; gAttachSectionIndex 记错，页码重置落空。
+    ; 这里先在 mark_idx 附近按“附件N”文本重新查找，最可靠；找不到再退回索引。
     p_mark2 := ""
-    try p_mark2 := p_mark.Range.Paragraphs(1)
-    catch
-        p_mark2 := p_mark
+    try {
+        for off in [0, 1, -1, 2, -2] {
+            idx2 := mark_idx + off
+            if (idx2 < 1 || idx2 > doc.Paragraphs.Count)
+                continue
+            cand := doc.Paragraphs(idx2)
+            candText := TrimAllSpaces(StrReplace(RTrim(cand.Range.Text, "`r`n"), Chr(12), ""))
+            if (RegExMatch(candText, "^附件\s*[0-9０-９一二三四五六七八九十]+\s*[:：]?\s*$")) {
+                p_mark2 := cand
+                break
+            }
+        }
+    }
+    if (!IsObject(p_mark2)) {
+        try p_mark2 := doc.Paragraphs(mark_idx)
+        catch
+            p_mark2 := p_mark
+    }
 
     sec := ""
     try sec := p_mark2.Range.Sections(1)
