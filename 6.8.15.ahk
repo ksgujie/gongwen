@@ -3259,6 +3259,8 @@ WriteFooterPageBlock(footer, paraIndex, formatStr, bmName) {
     } else {
         footer.Range.Fields.Add(r, wdFieldPage, , false)
     }
+    ; v6.8.15：添加页码字段后显式更新，使 PAGE 字段使用新节的起始页码（从 1 开始）
+    try footer.Range.Fields.Update()
 
     ; 重新获取段落范围，确保包含刚插入的域和文字
     target := footer.Range.Paragraphs.Item(paraIndex).Range
@@ -3309,10 +3311,12 @@ SetPageNumbers(doc, formatStr := "格式数字 — 1 — 居中", skipSinglePage
             bmName := "DocFmt_PN_S" section.Index "_T" footerType "_" A_TickCount
             try {
                 footer := section.Footers(footerType)
-                footer.LinkToPrevious := false
+                ; v6.8.15：附件节先清空页脚（避免顺延正文页码），再断开与上一节的链接，
+                ; 避免清空操作把 LinkToPrevious 重置回 true。
                 if (isAttachSec) {
                     try footer.Range.Text := ""
                 }
+                footer.LinkToPrevious := false
 
                 ; 先移除上一次写入的页码块，保留页脚其他内容
                 removed := RemoveFooterPageBlock(footer)
