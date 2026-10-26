@@ -2798,39 +2798,41 @@ IsBreakOnlyParagraph(paragraph) {
 ; 将页码重置为从 1 开始（附件页码单独编号）。若标记本身已在新页或已设置
 ; 段前分页/已有分页符，则不再重复处理，避免多出空白页。
 ApplyAttachmentPageBreak(doc, p_mark, mark_idx) {
-    global wdSectionBreakNextPage
+    global wdSectionBreakNextPage, gAttachSectionIndex
     if (!IsObject(p_mark) || mark_idx <= 1)
         return
+
+    ; 判断附件是否已经在新页：标记段有段前分页，或标记段/上一段末尾有分页符/分节符
+    alreadyNewPage := false
     try {
         if (p_mark.Format.PageBreakBefore)
-            return
+            alreadyNewPage := true
     }
     try {
-        if (HasPageBreakChar(p_mark.Range.Text))
-            return
+        if (!alreadyNewPage && HasPageBreakChar(p_mark.Range.Text))
+            alreadyNewPage := true
     }
     try {
-        if (HasPageBreakChar(doc.Paragraphs(mark_idx - 1).Range.Text))
-            return
+        if (!alreadyNewPage && HasPageBreakChar(doc.Paragraphs(mark_idx - 1).Range.Text))
+            alreadyNewPage := true
     }
 
-    try {
-        ; 在“附件标记”段落最前面插入分节符（下一页），新建一节
-        r := p_mark.Range.Duplicate
-        r.Collapse(1)
-        r.InsertBreak(wdSectionBreakNextPage)
-    } catch {
-        try p_mark.Format.PageBreakBefore := true
-        return
+    ; 若附件尚未在新页，在“附件标记”段落最前面插入分节符（下一页），新建一节
+    if (!alreadyNewPage) {
+        try {
+            r := p_mark.Range.Duplicate
+            r.Collapse(1)
+            r.InsertBreak(wdSectionBreakNextPage)
+        } catch {
+            try p_mark.Format.PageBreakBefore := true
+        }
     }
 
-    ; 分节符插入后，重新定位“附件标记”段落。Word 会把分节符插到该段前面，
-    ; 此时附件标记段落很可能已进入新节。优先取“附件标记”段落所属的节来设置页码重置。
+    ; 分节符插入后，重新定位“附件标记”段落所在的节，用于页码重置。
+    ; Word 会把分节符插到该段前面，附件标记段落进入新节。
     p_mark2 := ""
-    try p_mark2 := doc.Paragraphs(mark_idx)
+    try p_mark2 := p_mark.Range.Paragraphs(1)
     catch
-        try p_mark2 := p_mark.Range.Paragraphs(1)
-    if (!IsObject(p_mark2))
         p_mark2 := p_mark
 
     sec := ""
@@ -2844,12 +2846,11 @@ ApplyAttachmentPageBreak(doc, p_mark, mark_idx) {
     }
 
     if (IsObject(sec)) {
-        global gAttachSectionIndex
         try gAttachSectionIndex := sec.Index
         ps := ""
         try ps := sec.PageSetup
         if (IsObject(ps)) {
-            ; 断开新节页脚与上一节的链接（首页、奇偶页、普通页脚）
+            ; 断开该节页脚与上一节的链接（首页、奇偶页、普通页脚）
             try sec.Footers(1).LinkToPrevious := false
             try sec.Footers(1).Range.Text := ""
             try {
@@ -2867,9 +2868,7 @@ ApplyAttachmentPageBreak(doc, p_mark, mark_idx) {
             ; 强制设置：本节页码从 1 开始
             try {
                 pn := ps.PageNumbering
-                try pn.RestartNumberingAtSection := -1  ; wdRestartSection
-                Sleep(1)
-                pn.RestartNumberingAtSection := -1
+                try pn.RestartNumberingAtSection := true
                 pn.StartingNumber := 1
             }
             ; 部分 Word 版本也需要在页眉页脚集合上确保不链接
@@ -3296,7 +3295,7 @@ SetPageNumbers(doc, formatStr := "格式数字 — 1 — 居中", skipSinglePage
         if (isAttachSec) {
             try {
                 pn := pageSetup.PageNumbering
-                try pn.RestartNumberingAtSection := -1
+                try pn.RestartNumberingAtSection := true
                 pn.StartingNumber := 1
             }
         }
