@@ -4,7 +4,7 @@
 
 ## 先读这些
 
-- `6.8.12.ahk`：当前最新版，唯一应修改的脚本；约 3900 行，全部逻辑在这一个文件里。
+- `6.8.15.ahk`：当前最新版，唯一应修改的脚本；约 4100 行，全部逻辑在这一个文件里。
 - `README.md`：面向用户的行为说明和逐版本更新日志。
 - `程序整体说明.md`：整体架构、函数分区、数据存储和已知坑，换模型接手时先看它。
 - `备忘录.txt`：用户的 10 条协作约定（中文交流、先规划、改版本号等）。
@@ -22,17 +22,32 @@
 
 ```powershell
 # 启动 GUI
-& 'C:\AutoHotkey\v2\AutoHotkey64.exe' '6.8.12.ahk'
+& 'C:\AutoHotkey\v2\AutoHotkey64.exe' '6.8.15.ahk'
 
 # 静默批量：文件或文件夹作为参数；文件夹只扫第一层，~$ 锁文件跳过
-& 'C:\AutoHotkey\v2\AutoHotkey64.exe' '6.8.12.ahk' '示例.docx' '某文件夹'
+& 'C:\AutoHotkey\v2\AutoHotkey64.exe' '6.8.15.ahk' '示例.docx' '某文件夹'
 
 # Git（仓库根目录就是当前目录）
 & 'W:\git\bin\git.exe' status --short
 & 'W:\git\bin\git.exe' log --oneline
 ```
 
-没有测试套件。验证方式：把 `6.8.12.ahk` 和一份 `.docx` 复制到临时目录，静默跑两次，检查日志是否按“一文件一行”追加；再启动 GUI 让用户测试。
+没有测试套件。验证方式：把最新 `.ahk` 和一份 `.docx` 复制到临时目录，静默跑两次，检查日志是否按“一文件一行”追加；再启动 GUI 让用户测试。
+
+## Git 推送代理约定（用户明确要求）
+
+GitHub 直连经常失败（`Connection was reset` / `Failed to connect to github.com:443`）。**不要永久配置 git 代理**，每次 `push` 时按下面规则临时处理：
+
+1. 先探测本机代理端口（用户常用 Clash，端口 `7890`）：
+   ```powershell
+   Test-NetConnection 127.0.0.1 -Port 7890 -InformationLevel Quiet -WarningAction SilentlyContinue
+   ```
+2. **端口可用** → 推送命令临时加 `-c` 参数，不改任何全局配置：
+   ```powershell
+   & 'W:\git\bin\git.exe' -C '<仓库目录>' -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 push
+   ```
+3. **端口不可用** → 直接 `push`；若报连接失败，提示用户先打开代理软件再重试，不要自行改系统代理或 git 全局配置。
+4. 判断推送是否成功以 `git log --oneline origin/main -1` 为准，不要只看 PowerShell 的红色报错（git 正常输出到 stderr 也会显示红字）。
 
 ## 日志（v6.8.11 起）
 
