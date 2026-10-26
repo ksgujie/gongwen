@@ -86,7 +86,9 @@
 ;        7. 底部“清空列表”“导出设置”“结束后台排版进程”三个按钮统一宽度；
 ;        8. “排版增强与细节控制选项”的三个选项增加鼠标悬停说明。
 ; v6.8.10 1. 修复三个排版选项悬停时不显示说明的问题，改为程序自己控制的悬停提示；
-;        2. 首页底部四个按钮改为等宽排列。
+;        2. 备份目录输入框上移 3 像素，“浏览…”“打开”两个按钮改为与其等高并垂直对齐；
+;        3. 首页底部四个按钮重新分配宽度：“清空列表”“导出设置”变短，“结束后台排版进程”
+;           保持不变，“保存参数并运行”加长。
 ; =====================================================================
 
 ; --- 全局版本号定义 ---
@@ -677,11 +679,11 @@ ShowGUI() {
     uiPDF.OnEvent("Click", (ctrl, *) => SaveSingleSetting("Options", "ExportPDF", ctrl.Value))
     uiBAK.OnEvent("Click", (ctrl, *) => OnBackupCheckboxChange(ctrl))
 
-    mainGui.Add("Text", "x35 y313 w65", "备份目录:")
-    uiBakPath := mainGui.Add("Edit", "x105 y309 w400", BakDir)
-    uiBakBtn := mainGui.Add("Button", "x510 y305 w80 h31", "浏览...")
+    mainGui.Add("Text", "x35 y310 w65", "备份目录:")
+    uiBakPath := mainGui.Add("Edit", "x105 y306 w400 h27", BakDir)
+    uiBakBtn := mainGui.Add("Button", "x510 y306 w80 h27", "浏览...")
     ; 正方形图标按钮：BS_ICON(0x40) + BM_SETIMAGE 只显示图标，不绘制文字
-    uiBakOpen := mainGui.Add("Button", "x595 y305 w31 h31 +0x40", "打开")
+    uiBakOpen := mainGui.Add("Button", "x595 y306 w27 h27 +0x40", "打开")
     SetButtonStockIcon(uiBakOpen, 4) ; 4 = SIID_FOLDEROPEN（系统标准“打开文件夹”图标）
 
     uiBakPath.OnEvent("Change", (ctrl, *) => SaveSingleSetting("Options", "BakDir", ctrl.Value))
@@ -703,19 +705,19 @@ ShowGUI() {
     uiLV.OnEvent("DoubleClick", (*) => OpenSelectedLVFile())
 
     ; --- 底部：功能操作按钮栏 ---
-    uiBtnClear := mainGui.Add("Button", "x20 y525 w154 h35", "清空列表")
+    uiBtnClear := mainGui.Add("Button", "x20 y525 w122 h35", "清空列表")
     uiBtnClear.OnEvent("Click", ClearList)
 
-    uiBtnExport := mainGui.Add("Button", "x182 y525 w154 h35", "导出设置")
+    uiBtnExport := mainGui.Add("Button", "x150 y525 w122 h35", "导出设置")
     uiBtnExport.OnEvent("Click", (*) => ExportSettingsToReg())
 
-    uiBtnKill := mainGui.Add("Text", "x344 y525 w154 h35 Center +0x200 BackgroundFFF9C4 Border c554400", "结束后台排版进程")
+    uiBtnKill := mainGui.Add("Text", "x280 y525 w154 h35 Center +0x200 BackgroundFFF9C4 Border c554400", "结束后台排版进程")
     uiBtnKill.SetFont("s10 bold")
     uiBtnKill.OnEvent("Click", KillAllWordProcesses)
 
     OnMessage(0x0200, CheckButtonHover)
 
-    uiBtnRun := mainGui.Add("Text", "x506 y525 w154 h35 Center +0x200 BackgroundE8F5E9 Border c117711", "保存参数并运行  ▶")
+    uiBtnRun := mainGui.Add("Text", "x442 y525 w218 h35 Center +0x200 BackgroundE8F5E9 Border c117711", "保存参数并运行  ▶")
     uiBtnRun.SetFont("s11 bold")
     uiBtnRun.OnEvent("Click", RunGUIProcessing)
 
